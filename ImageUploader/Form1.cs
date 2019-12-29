@@ -21,17 +21,17 @@ namespace ImageUploader
         SqlCommand selectcmd = null;
         SqlDataAdapter sde = null;
         DataSet ds = null;
-
+        string createDirectory = null;
         public Form1()
         {
             InitializeComponent();
-           
-          
+
+
 
 
 
             //int id;
-                try
+            try
             {
                 var connectionString = ConfigurationManager.ConnectionStrings["ShoppingDb"].ConnectionString;
                 conn = new SqlConnection(connectionString);
@@ -42,7 +42,7 @@ namespace ImageUploader
 
                 //color
                 selectcmd = new SqlCommand("Select ColorId,ColorName from ColorMaster order by ColorName asc", conn);
-                sde  = new SqlDataAdapter(selectcmd);
+                sde = new SqlDataAdapter(selectcmd);
                 ds = new DataSet();
                 sde.Fill(ds);
                 cmbColor.DataSource = ds.Tables[0];
@@ -110,29 +110,56 @@ namespace ImageUploader
         {
             int size = -1;
 
-          
+
             OpenFile.InitialDirectory = "d:\\";
             OpenFile.Filter = "Image Files(*.BMP; *.JPG; *.GIF)| *.BMP; *.JPG; *.GIF | All files(*.*) | *.* ";    //"txt files (*.txt)|*.txt|All files (*.*)|*.*";
-            DialogResult result = OpenFile.ShowDialog(); 
+            DialogResult result = OpenFile.ShowDialog();
 
-            if (result == DialogResult.OK) 
+            if (result == DialogResult.OK)
             {
 
                 try
                 {
-                   
+                    string filename = null;
                     txtFile.Text = OpenFile.FileName;
                     // First load the image somehow
                     Image myImage = Image.FromFile(txtFile.Text.Trim(), true);
                     // Save the image with a quality of 50% 
 
-                    string path = AppDomain.CurrentDomain.BaseDirectory;
-                    SaveJpeg(path+"temp.jpg", myImage, 50);
+                    ///  string path = AppDomain.CurrentDomain.BaseDirectory;
+                    ///  
+                    string path = ConfigurationManager.AppSettings["SaveImagePath"].ToString();
+                    /// string datetimesecond = DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss");
+                    //// datetimesecond = datetimesecond.Replace("/", "").Replace(":", "");
+                    string fileDirectory = DateTime.Now.ToString("MMMM dd") + DateTime.Now.Year.ToString();
+                    createDirectory = path + "\\" + fileDirectory;
+
+                    var index = txtFile.Text.LastIndexOf(@"\");
+                    
+                    if(index!=-1)
+                    {
+                        filename = txtFile.Text.Substring((index + 1), (txtFile.Text.Trim().Length - 1) - index);
+                    }
+
+
+                    if (Directory.Exists(path))
+                    {
+                        Directory.CreateDirectory(createDirectory);
+                        SaveJpeg(createDirectory + "\\" +  filename, myImage, 50);
+                        createDirectory = ConfigurationManager.AppSettings["SaveImageforUI"].ToString() + fileDirectory + "\\" + filename;   // createDirectory + "\\temp.jpg";
+                    }
+                    else
+                    {
+                        SaveJpeg(createDirectory + "\\"+filename, myImage, 50);
+                        createDirectory = ConfigurationManager.AppSettings["SaveImageforUI"].ToString() + fileDirectory + "\\" + filename;
+
+                    }
 
 
 
-                    data = ReadAllBytes(path + "temp.jpg");
-                 
+
+                  /////  data = ReadAllBytes(createDirectory + "\\" + txtFile.Text);
+
 
                     ////StoreImage(data, txtFile.Text.Trim());
                 }
@@ -142,7 +169,7 @@ namespace ImageUploader
             }
         }
 
-     
+
         private byte[] ReadAllBytes(string fileName)
         {
             byte[] buffer = null;
@@ -156,7 +183,8 @@ namespace ImageUploader
         }
 
 
-        private void StoreImage(byte[] content)
+       // private void StoreImage(byte[] content)
+               private void StoreImage()
         {
             var connectionString = ConfigurationManager.ConnectionStrings["ShoppingDb"].ConnectionString;
             SqlConnection conn = new SqlConnection(connectionString);
@@ -165,7 +193,7 @@ namespace ImageUploader
             try
             {
 
-                string insertQuery= "Insert into ItemMaster (SizeId,ColorId,Image1,SupplierId,ItemName," +
+                string insertQuery = "Insert into ItemMaster (SizeId,ColorId,Image1,SupplierId,ItemName," +
                     "ItemDescripton," +
                     "Price,InitialQty,OfferPrice,Brand,ChildMenuId,DeliveryCharges,AvailableQty)" +
                     " values (@sizeId,@colorId,@image,@supId," +
@@ -186,10 +214,13 @@ namespace ImageUploader
                 SqlParameter colorIdPara = insert.Parameters.Add("@colorId", SqlDbType.Int);
                 colorIdPara.Value = colorid;
 
-                SqlParameter imageParameter = insert.Parameters.Add("@image", SqlDbType.Binary);
-                imageParameter.Value = content;
-                imageParameter.Size = content.Length;
+                //SqlParameter imageParameter = insert.Parameters.Add("@image", SqlDbType.Binary);
+                //imageParameter.Value = content;
+                //imageParameter.Size = content.Length;
 
+                SqlParameter imageParameter = insert.Parameters.Add("@image", SqlDbType.NVarChar);
+                imageParameter.Value = createDirectory;  //ConfigurationManager.AppSettings["SaveImagePath"].ToString(); ;
+               
 
                 DataRow selectedSupDataRow = ((DataRowView)cmbSupId.SelectedItem).Row;
                 int supId = Convert.ToInt32(selectedSupDataRow["SupplierId"]);
@@ -219,19 +250,19 @@ namespace ImageUploader
 
                 DataRow selectedSubMenuDataRow = ((DataRowView)cmbSubMenu.SelectedItem).Row;
                 int parentid = Convert.ToInt32(selectedSubMenuDataRow["id"]);
-              
+
                 SqlParameter childMenuIdPara = insert.Parameters.Add("@childMenuId", SqlDbType.Int);
                 childMenuIdPara.Value = parentid;
 
 
                 SqlParameter delChargePara = insert.Parameters.Add("@delCharge", SqlDbType.Int);
-                delChargePara.Value=Convert.ToDouble(txtDelCharge.Text.Trim());
+                delChargePara.Value = Convert.ToDouble(txtDelCharge.Text.Trim());
 
                 SqlParameter AvailableQtypara = insert.Parameters.Add("@AvailableQty", SqlDbType.Int);
                 AvailableQtypara.Value = Convert.ToDouble(txtInitialQty.Text.Trim());
 
                 insert.ExecuteNonQuery();
-                //  MessageBox.Show("Image has been added successfully"); success = true;
+                MessageBox.Show("Image has been added successfully");
             }
             catch (Exception ex)
             {
@@ -266,12 +297,15 @@ namespace ImageUploader
             { lblError.Visible = false; }
 
 
-            StoreImage(data);
+        //    StoreImage(data);
+            StoreImage();
             string path = AppDomain.CurrentDomain.BaseDirectory;
             if (File.Exists(path + "temp.jpg"))
             {
                 File.Delete(path + "temp.jpg");
             }
+
+            ClearControls();
         }
 
 
@@ -292,6 +326,7 @@ namespace ImageUploader
             EncoderParameters encoderParams = new EncoderParameters(1);
             encoderParams.Param[0] = qualityParam;
             img.Save(path, jpegCodec, encoderParams);
+           
         }
 
         /// <summary> 
@@ -314,7 +349,7 @@ namespace ImageUploader
         {
             DataRow selectedDataRow = ((DataRowView)cmbMenu.SelectedItem).Row;
             int parentid = Convert.ToInt32(selectedDataRow["id"]);
-           string MenuName = selectedDataRow["MenuName"].ToString();
+            string MenuName = selectedDataRow["MenuName"].ToString();
 
 
             var connectionString = ConfigurationManager.ConnectionStrings["ShoppingDb"].ConnectionString;
@@ -332,6 +367,25 @@ namespace ImageUploader
             cmbSubMenu.DisplayMember = "MenuName";
             cmbSubMenu.ValueMember = "id";
             ds.Tables.Clear();
+        }
+
+        private void ClearControls()
+        {
+            cmbSize.SelectedIndex = 0;
+            cmbSupId.SelectedIndex = 0;
+            cmbColor.SelectedIndex = 0;
+            txtFile.Text = string.Empty;
+            txtItemName.Text = string.Empty;
+            txtItemDesc.Text = string.Empty;
+            txtPrice.Text = string.Empty;
+            txtInitialQty.Text = string.Empty;
+            txtOfferPrice.Text = string.Empty;
+            txtBrand.Text = string.Empty;
+            txtDelCharge.Text = string.Empty;
+            cmbSize.Focus();
+
+
+
         }
     }
 }
